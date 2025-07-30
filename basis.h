@@ -5,6 +5,17 @@
 #include <fstream>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
+#include <stdlib.h>
+#include <stdint.h>
+
+// Branch prediction hints for better performance
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
+// Prefetch hints for cache optimization
+#define PREFETCH_READ(addr)   __builtin_prefetch(addr, 0, 3)
+#define PREFETCH_WRITE(addr)  __builtin_prefetch(addr, 1, 3)
 
 //#include <stdio.h>
 //#include <unistd.h>
@@ -16,6 +27,72 @@
 //#include <assert.h>
 
 using namespace std;
+
+// Performance optimization: Lookup tables for expensive math operations
+#define MAX_LOOKUP_SIZE 100000
+double sqrt_lookup[MAX_LOOKUP_SIZE];
+double log_lookup[MAX_LOOKUP_SIZE];
+double log2_lookup[MAX_LOOKUP_SIZE];
+bool lookup_tables_initialized = false;
+
+// Optimized math functions using lookup tables
+inline double fast_sqrt(double x) {
+    int idx = static_cast<int>(x);
+    if (idx >= 0 && idx < MAX_LOOKUP_SIZE) {
+        return sqrt_lookup[idx];
+    }
+    return sqrt(x);
+}
+
+inline double fast_log(double x) {
+    int idx = static_cast<int>(x);
+    if (idx >= 1 && idx < MAX_LOOKUP_SIZE) {
+        return log_lookup[idx];
+    }
+    return log(x);
+}
+
+inline double fast_log2(double x) {
+    int idx = static_cast<int>(x);
+    if (idx >= 1 && idx < MAX_LOOKUP_SIZE) {
+        return log2_lookup[idx];
+    }
+    return log2(x);
+}
+
+// Initialize lookup tables
+inline void init_math_lookup_tables() {
+    if (!lookup_tables_initialized) {
+        for (int i = 0; i < MAX_LOOKUP_SIZE; i++) {
+            sqrt_lookup[i] = sqrt(i);
+            if (i > 0) {
+                log_lookup[i] = log(i);
+                log2_lookup[i] = log2(i);
+            }
+        }
+        lookup_tables_initialized = true;
+    }
+}
+
+// Fast random number generator using xorshift
+static uint32_t xorshift_state = 123456789;
+
+inline uint32_t fast_rand() {
+    xorshift_state ^= xorshift_state << 13;
+    xorshift_state ^= xorshift_state >> 17;
+    xorshift_state ^= xorshift_state << 5;
+    return xorshift_state;
+}
+
+// Fast random double between 0.0 and 1.0
+inline double fast_rand_double() {
+    return fast_rand() * (1.0 / 4294967296.0);
+}
+
+// Set seed for fast random generator
+inline void fast_srand(uint32_t seed) {
+    xorshift_state = seed ? seed : 123456789;
+}
 
 enum type{SAT3, SAT4 ,SAT5, SAT6, SAT7, strSAT} probtype;
 
@@ -161,33 +238,59 @@ void free_memory()
 //		delete[] var_poslit[i];
 //		delete[] var_neglit[i];
 	}
+	
+	// Free aligned allocated memory
+	free(var_reward);
+	free(vSelect);
+	free(clause_weight);
+	free(clause_reward);
+	free(sat_count);
+	free(sat_var);
+	free(unsat_stack);
+	free(index_in_unsat_stack);
+	free(org_clause_lit_count);
+	free(time_stamp_clause);
+	free(count_selectCaluse);
+	free(isCandidate_first);
+	free(isCandidate_second);
+	free(candidate_falseClause_first_stack);
+	free(candidate_falseClause_second_stack);
+	free(whereCandidate_first);
+	free(whereCandidate_second);
 }
 inline void allocateMemory() {
-	// Allocating memory for the instance data (independent from the assignment).
-
-
-	// Allocating memory for the assignment dependent data.
-//	var_lit[MAX_VARS]=(lit*) malloc(sizeof(lit) * (num_vars + 1));
-	var_reward= (double*) malloc(sizeof(double) * (num_vars + 1));
-	vSelect=(int*) malloc(sizeof(int) * (num_vars + 1));
-	clause_weight= (int*) malloc(sizeof(int) * (num_clauses + 1));
-	clause_reward= (double*) malloc(sizeof(double) * (num_clauses + 1));
-	sat_count= (int*) malloc(sizeof(int) * (num_clauses + 1));
-	sat_var= (int*) malloc(sizeof(int) * (num_clauses + 1));
-	unsat_stack= (int*) malloc(sizeof(int) * (num_clauses + 1));
-	index_in_unsat_stack= (int*) malloc(sizeof(int) * (num_clauses + 1));
+	// Initialize lookup tables for optimized math operations
+	init_math_lookup_tables();
 	
-   org_clause_lit_count= (int*) malloc(sizeof(int) * (num_clauses + 1));
-    time_stamp_clause= (int*) malloc(sizeof(int) * (num_clauses + 1));
-	count_selectCaluse =(int*) malloc(sizeof(int) * (num_clauses + 1));
-	isCandidate_first=(int*) malloc(sizeof(int) * (num_clauses + 1));
-	isCandidate_second=(int*) malloc(sizeof(int) * (num_clauses + 1));
+	// Allocating memory for the instance data (independent from the assignment).
+	// Using aligned allocation for better cache performance
+	
+	// Allocating memory for the assignment dependent data.
+	var_reward= (double*) aligned_alloc(64, sizeof(double) * (num_vars + 1));
+	vSelect=(int*) aligned_alloc(64, sizeof(int) * (num_vars + 1));
+	clause_weight= (int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	clause_reward= (double*) aligned_alloc(64, sizeof(double) * (num_clauses + 1));
+	sat_count= (int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	sat_var= (int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	unsat_stack= (int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	index_in_unsat_stack= (int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	
+    org_clause_lit_count= (int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+    time_stamp_clause= (int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	count_selectCaluse =(int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	isCandidate_first=(int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	isCandidate_second=(int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
 
-	candidate_falseClause_first_stack=(int*) malloc(sizeof(int) * (num_clauses + 1));
-	candidate_falseClause_second_stack=(int*) malloc(sizeof(int) * (num_clauses + 1));
-	whereCandidate_first=(int*) malloc(sizeof(int) * (num_clauses + 1));
-	whereCandidate_second=(int*) malloc(sizeof(int) * (num_clauses + 1));
+	candidate_falseClause_first_stack=(int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	candidate_falseClause_second_stack=(int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	whereCandidate_first=(int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
+	whereCandidate_second=(int*) aligned_alloc(64, sizeof(int) * (num_clauses + 1));
 
+	// Initialize arrays to zero for better cache behavior
+	if (var_reward) memset(var_reward, 0, sizeof(double) * (num_vars + 1));
+	if (vSelect) memset(vSelect, 0, sizeof(int) * (num_vars + 1));
+	if (clause_weight) memset(clause_weight, 0, sizeof(int) * (num_clauses + 1));
+	if (clause_reward) memset(clause_reward, 0, sizeof(double) * (num_clauses + 1));
 }
 /*
  * Read in the problem.

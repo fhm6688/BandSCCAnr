@@ -121,7 +121,7 @@ void init()
         vSelect[v]=0;
         var_reward[v]=1.0;
         if(fix[v]==0){
-            if(rand()%2==1) cur_soln[v] = 1;
+            		if(fast_rand()%2==1) cur_soln[v] = 1;
             else cur_soln[v] = 0;
 			time_stamp[v] = 0;
 			conf_change[v] = 1;

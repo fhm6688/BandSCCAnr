@@ -22,7 +22,9 @@ void smooth_clause_weights()
 	int i,j,c,v;
 	int new_total_weight=0;
 
+	// Vectorizable loop with prefetch hints
 	for (v=1; v<=num_vars; ++v) {
+		if(unlikely(v+8 <= num_vars)) PREFETCH_WRITE(&score[v+8]);
 		score[v] = 0;
 		var_reward[v]=var_reward[v]*p_scale;
 	}
@@ -31,21 +33,26 @@ void smooth_clause_weights()
 	//smooth clause score and update score of variables
 	for (c = 0; c<num_clauses; ++c)
 	{
+		if(unlikely(c+8 < num_clauses)) {
+			PREFETCH_READ(&clause_weight[c+8]);
+			PREFETCH_READ(&clause_lit_count[c+8]);
+		}
+		
 		clause_reward[c]=clause_reward[c]*p_scale;
 		clause_weight[c] = clause_weight[c]*p_scale+scale_ave;
-		if(clause_weight[c]<1) clause_weight[c] = 1;
+		if(unlikely(clause_weight[c]<1)) clause_weight[c] = 1;
 		
 		new_total_weight+=clause_weight[c];
 		
 		//update score of variables in this clause 
-		if (sat_count[c]==0) 
+		if (likely(sat_count[c]==0)) 
 		{
 			for(j=0; j<clause_lit_count[c]; ++j)
 			{
 				score[clause_lit[c][j].var_num] += clause_weight[c];
 			}
 		}
-		else  if(sat_count[c]==1)
+		else if(sat_count[c]==1)
 			score[sat_var[c]]-=clause_weight[c];
 	}
 	
