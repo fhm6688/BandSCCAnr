@@ -18,7 +18,7 @@ int pick_var() {
 
 	/**Greedy Mode**/
 	/*CCD (configuration changed decreasing) mode, the level with configuation chekcing*/
-	if(goodvar_stack_fill_pointer>0)
+	if(likely(goodvar_stack_fill_pointer>0))
 	{
 		best_var = goodvar_stack[0];
 		
@@ -57,25 +57,25 @@ int pick_var() {
 
 	/*focused random walk*/
 	count_FRW++;
-	randPosition_p = (double) (rand()) / (RAND_MAX + 1.0);
+	randPosition_p = fast_rand_double();
 	
 	/*three-level clause selection strategy*/
 	if(randPosition_p<p_first) {
 		if(count_candidate_falseClause_first>0) {
-			c =candidate_falseClause_first_stack[rand()%count_candidate_falseClause_first];
+			c =candidate_falseClause_first_stack[fast_rand()%count_candidate_falseClause_first];
 			count_SelectT_first++;
 		} 
 		else{
-			c=unsat_stack[rand()%unsat_stack_fill_pointer];
+			c=unsat_stack[fast_rand()%unsat_stack_fill_pointer];
 		}	
 	} 
 	else if((randPosition_p>=p_first)&&(randPosition_p<(p_first+p_second))) {
 		if(count_candidate_falseClause_second>0) {
-			c =candidate_falseClause_second_stack[rand()%count_candidate_falseClause_second];
+			c =candidate_falseClause_second_stack[fast_rand()%count_candidate_falseClause_second];
 			count_SelectT_second++;
 		} 
 		else{
-			c=unsat_stack[rand()%unsat_stack_fill_pointer];
+			c=unsat_stack[fast_rand()%unsat_stack_fill_pointer];
 		}	
 		
 	} 
@@ -84,10 +84,10 @@ int pick_var() {
 				double best_ucb,temp_ucb;
 				int cl;
 				c=unsat_stack[0];
-		   		best_ucb=clause_reward[c]/(count_selectCaluse[c]+1)+sqrt(ucbc*log(count_FRW+1)/(count_selectCaluse[c]+1));				
+		   		best_ucb=clause_reward[c]/(count_selectCaluse[c]+1)+fast_sqrt(ucbc*fast_log(count_FRW+1)/(count_selectCaluse[c]+1));				
 				for(int i=1;i<unsat_stack_fill_pointer;i++){
 					cl=unsat_stack[i];
-					temp_ucb=clause_reward[cl]/(count_selectCaluse[cl]+1)+sqrt(ucbc*log(count_FRW+1)/(count_selectCaluse[cl]+1));	
+					temp_ucb=clause_reward[cl]/(count_selectCaluse[cl]+1)+fast_sqrt(ucbc*fast_log(count_FRW+1)/(count_selectCaluse[cl]+1));	
 					if(temp_ucb>best_ucb) {
 						best_ucb=temp_ucb;
 						c=cl;
@@ -98,7 +98,7 @@ int pick_var() {
 			}
 
 	count_selectCaluse[c]++;
-	clause_reward[c]+=log2(step+1-time_stamp_clause[c]);
+	clause_reward[c]+=fast_log2(step+1-time_stamp_clause[c]);
 	time_stamp_clause[c]=step;
 	
 	clause_c = clause_lit[c];
@@ -110,7 +110,7 @@ int pick_var() {
 	
 		sumProb += probs[k];
 	}
-	randPosition = (double) (rand()) / (RAND_MAX + 1.0) * sumProb;
+	randPosition = fast_rand_double() * sumProb;
 	for (k = k - 1; k != 0; k--) {
 		sumProb -= probs[k];
 		if (sumProb <= randPosition)
@@ -125,12 +125,12 @@ int pick_var() {
 	/*tie-breaking employing MAB for selecting a variable*/	
 	else {
 		count_breaktingTie++;
-		tempBest_var=var_reward[best_var]/(vSelect[best_var]+1)+sqrt(ucbc*log(step+1)/(vSelect[best_var]+1));	
+		tempBest_var=var_reward[best_var]/(vSelect[best_var]+1)+fast_sqrt(ucbc*fast_log(step+1)/(vSelect[best_var]+1));	
 		for(k=0; k<clause_lit_count[c]; ++k) {
 			v=clause_c[k].var_num;
 			if(score[v]>score[best_var]) best_var = v;
 			else if(score[v]==score[best_var]) {
-				tempV=var_reward[v]/(vSelect[v]+1)+sqrt(ucbc*log(step+1)/(vSelect[v]+1));
+				tempV=var_reward[v]/(vSelect[v]+1)+fast_sqrt(ucbc*fast_log(step+1)/(vSelect[v]+1));
 				if(tempV>tempBest_var){
 						best_var = v;
 						tempBest_var=tempV;
@@ -154,10 +154,10 @@ void local_search(int max_flips) {
 	int i,flipvar;
 			
 	for (step = 0; step<max_flips; step++) { 
-		if(unsat_stack_fill_pointer==0) return;
+		if(unlikely(unsat_stack_fill_pointer==0)) return;
 		flipvar = pick_var();
 		vSelect[flipvar]++;
-		var_reward[flipvar] += log2(step+1-time_stamp[flipvar]);
+		var_reward[flipvar] += fast_log2(step+1-time_stamp[flipvar]);
 		time_stamp[flipvar] = step;		
 		flip(flipvar);
 
@@ -188,6 +188,7 @@ int main(int argc, char* argv[]) {
 	p_second=total_p-p_first;
 	Beta_second=Beta_first/2;
 	srand(seed);
+	fast_srand(seed);
 
 	if(unitclause_queue_end_pointer>0) {
 		preprocess();
